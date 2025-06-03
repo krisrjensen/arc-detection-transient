@@ -28,6 +28,9 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from styles import styles_gallery
 from image_utils import universal_saver
+# API COMPATIBILITY
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+from api_formats import standardize_transient_output, standardize_error_response, parse_worker3_database_input
 
 app = Flask(__name__)
 
@@ -841,51 +844,34 @@ def serve_plot(filename):
 
 @app.route('/sync', methods=['POST'])
 def sync():
-    """Sync with main data review tool (like the working viewer)"""
+    """Sync with main data review tool - STANDARDIZED API FORMAT"""
     global current_file_info
-    data = request.json
     
-    # Handle both protocols: experiment_path and file_id/filename
-    if 'experiment_path' in data:
-        # Protocol used by enhanced_data_cleaning_tool
-        experiment_path = data.get('experiment_path')
-        print(f"DEBUG SYNC: Received experiment_path: {experiment_path}")
+    try:
+        data = request.json
         
-        # Extract filename and try to map to file_id if possible
-        if experiment_path and '/' in experiment_path:
-            filename = experiment_path.split('/')[-1]
-            # Try to find file_id from V3 database
-            try:
-                conn = sqlite3.connect(V3_DATABASE_PATH)
-                cursor = conn.cursor()
-                cursor.execute('SELECT file_id FROM files WHERE original_filename = ?', (filename,))
-                result = cursor.fetchone()
-                conn.close()
-                file_id = result[0] if result else None
-            except:
-                file_id = None
-        else:
-            filename = experiment_path
-            file_id = None
-            
+        # WORKER 3 COMPATIBILITY: Parse standardized database input
+        parsed_data = parse_worker3_database_input(data)
+        
         # Update global state
-        current_file_info['file_id'] = file_id
-        current_file_info['filename'] = filename
+        current_file_info['file_id'] = parsed_data['file_id']
+        current_file_info['filename'] = parsed_data['filename']
+        current_file_info['experiment_path'] = parsed_data['experiment_path']
         
-        print(f"DEBUG SYNC: Mapped to file_id: {file_id}, filename: {filename}")
+        print(f"SYNC: Received standardized input - file_id: {parsed_data['file_id']}, filename: {parsed_data['filename']}")
         
-    else:
-        # Original protocol: file_id and filename
-        file_id = data.get('file_id')
-        filename = data.get('filename')
-        current_file_info['file_id'] = file_id
-        current_file_info['filename'] = filename
-        print(f"DEBUG SYNC: Direct file_id: {file_id}, filename: {filename}")
-    
-    return jsonify({
-        'success': True,
-        'synced_file': current_file_info
-    })
+        # STANDARDIZED RESPONSE FORMAT
+        return jsonify({
+            'status': 'success',
+            'service': 'worker4_transient_editor',
+            'synced_file': current_file_info,
+            'timestamp': time.time(),
+            'api_version': '1.0'
+        })
+        
+    except Exception as e:
+        print(f"SYNC ERROR: {e}")
+        return jsonify(standardize_error_response(str(e), 'worker4_transient_editor'))
 
 @app.route('/refresh')
 def refresh_current():
@@ -1154,12 +1140,81 @@ def get_current_transient_info():
 
 @app.route('/status')
 def status():
-    """Status endpoint for tool communication (Rev 20250529_134200_0_0_0_1)"""
+    """Status endpoint for tool communication - STANDARDIZED FORMAT"""
     return jsonify({
-        'service': 'transient_editor',
+        'service': 'worker4_transient_editor',
         'status': 'running',
-        'version': '20250602_011500_0_0_1_1'
+        'version': '20250602_015000_0_0_1_4',
+        'api_version': '1.0',
+        'universal_styling': True,
+        'worker3_compatible': True,
+        'worker5_compatible': True,
+        'demo_ready': True
     })
+
+@app.route('/api/analysis_result', methods=['GET'])
+def get_analysis_result():
+    """WORKER 5 COMPATIBILITY: Get standardized analysis result"""
+    global current_file_info
+    
+    try:
+        if not current_file_info.get('file_id'):
+            return jsonify(standardize_error_response("No current experiment", 'worker4_transient_editor'))
+        
+        # Get current transient data
+        experiment_path = current_file_info.get('experiment_path')
+        if not experiment_path:
+            return jsonify(standardize_error_response("No experiment path", 'worker4_transient_editor'))
+        
+        # Get transient information
+        transient_info = get_current_transient_info_data(experiment_path)
+        
+        # Standardize for Worker 5
+        standardized_result = standardize_transient_output({
+            'experiment_path': experiment_path,
+            'center_time': transient_info.get('transient_center'),
+            'center_sample': transient_info.get('transient_sample'),
+            'source': transient_info.get('transient_source', 'unknown'),
+            'confidence': 0.8,  # Default confidence
+            'total_time': 0.5,  # Standard file duration
+            'data_length': 2500000,  # Standard samples
+            'style': 'default',
+            'plot_filename': f"transient_analysis_{current_file_info['file_id']}.png",
+            'timestamp': time.time()
+        })
+        
+        return jsonify(standardized_result)
+        
+    except Exception as e:
+        return jsonify(standardize_error_response(str(e), 'worker4_transient_editor'))
+
+def get_current_transient_info_data(experiment_path):
+    """Helper function to get transient info without HTTP request"""
+    transient_center = None
+    transient_sample = None
+    transient_source = "none"
+    
+    # PRIORITY 1: Check for database transients
+    database_transients = get_database_transients(experiment_path)
+    if database_transients:
+        db_transient = database_transients[0]
+        transient_center = db_transient['time']
+        transient_sample = db_transient['sample']
+        transient_source = "database"
+    else:
+        # PRIORITY 2: Check for cached ML predictions
+        cached_result = get_saved_transient_center(experiment_path)
+        if cached_result:
+            transient_center = cached_result['center_time']
+            transient_sample = cached_result['center_sample']
+            transient_source = "cached"
+    
+    return {
+        'transient_center': transient_center,
+        'transient_sample': transient_sample,
+        'transient_source': transient_source,
+        'has_transient': transient_center is not None
+    }
 
 @app.route('/adjust_transient', methods=['POST'])
 def adjust_transient():

@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Transient Editor - Worker 4</title>
+    <style>
+        /* UNIVERSAL DEMO STYLING */
+        :root {
+            --primary-color: #1f77b4;
+            --background-color: #ffffff;
+            --text-color: #333333;
+            --grid-color: #f0f0f0;
+            --success-color: #2ca02c;
+            --error-color: #d62728;
+            --secondary-color: #ff7f0e;
+        }
+        
+        body {
+            font-family: 'Arial', 'DejaVu Sans', sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: var(--background-color);
+            color: var(--text-color);
+            line-height: 1.6;
+        }
+        
+        .header {
+            background: var(--primary-color);
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        
+        .coordinate-display {
+            background: var(--grid-color);
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            font-family: 'Courier New', monospace;
+            border-left: 4px solid var(--primary-color);
+        }
+        
+        .coordinate-value {
+            font-weight: bold;
+            color: var(--primary-color);
+            font-size: 1.1em;
+        }
+        
+        .control-panel {
+            background: var(--background-color);
+            border: 2px solid var(--grid-color);
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        
+        .control-group {
+            margin: 15px 0;
+            padding: 10px;
+            border-radius: 5px;
+            background: #f8f9fa;
+        }
+        
+        .control-group h3 {
+            color: var(--primary-color);
+            margin-top: 0;
+            border-bottom: 2px solid var(--primary-color);
+            padding-bottom: 5px;
+        }
+        
+        .btn {
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+            font-size: 14px;
+            transition: background-color 0.3s;
+        }
+        
+        .btn:hover {
+            background: #1565c0;
+        }
+        
+        .btn-success {
+            background: var(--success-color);
+        }
+        
+        .btn-error {
+            background: var(--error-color);
+        }
+        
+        .btn-secondary {
+            background: var(--secondary-color);
+        }
+        
+        .plot-container {
+            margin: 20px 0;
+            text-align: center;
+            border: 2px solid var(--grid-color);
+            border-radius: 8px;
+            padding: 10px;
+        }
+        
+        .plot-image {
+            max-width: 100%;
+            height: auto;
+            border: 1px solid var(--grid-color);
+            border-radius: 5px;
+        }
+        
+        .status-display {
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+            text-align: center;
+            font-weight: bold;
+        }
+        
+        .status-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .status-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .precision-controls {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin: 15px 0;
+        }
+        
+        .keyboard-help {
+            background: #e3f2fd;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            border-left: 4px solid var(--primary-color);
+        }
+        
+        .keyboard-help h4 {
+            color: var(--primary-color);
+            margin-top: 0;
+        }
+        
+        .key-combo {
+            background: white;
+            padding: 2px 6px;
+            border: 1px solid #ccc;
+            border-radius: 3px;
+            font-family: monospace;
+            margin: 0 2px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Transient Editor - Analysis Service Worker 4</h1>
+        <p>Precision Coordinate Mapping & Transient Fine-Tuning</p>
+    </div>
+    
+    <div class="coordinate-display">
+        <h3>Current Coordinate Information</h3>
+        <div>Experiment: <span class="coordinate-value" id="current-experiment">{{ experiment_name or 'None' }}</span></div>
+        <div>Transient Time: <span class="coordinate-value" id="transient-time">Loading...</span></div>
+        <div>Transient Sample: <span class="coordinate-value" id="transient-sample">Loading...</span></div>
+        <div>Detection Source: <span class="coordinate-value" id="detection-source">Loading...</span></div>
+        <div>Coordinate System: <span class="coordinate-value">5 MSPS Sampling Rate</span></div>
+    </div>
+    
+    <div class="control-panel">
+        <h2>Precision Coordinate Adjustment</h2>
+        
+        <div class="control-group">
+            <h3>Fine Adjustment (256 samples = 51.2μs)</h3>
+            <div class="precision-controls">
+                <button class="btn" onclick="adjustTransient('left', 'fine')">← Fine Left</button>
+                <button class="btn" onclick="adjustTransient('right', 'fine')">Fine Right →</button>
+            </div>
+        </div>
+        
+        <div class="control-group">
+            <h3>Coarse Adjustment (2048 samples = 409.6μs)</h3>
+            <div class="precision-controls">
+                <button class="btn btn-secondary" onclick="adjustTransient('left', 'coarse')">← Coarse Left</button>
+                <button class="btn btn-secondary" onclick="adjustTransient('right', 'coarse')">Coarse Right →</button>
+            </div>
+        </div>
+        
+        <div class="control-group">
+            <h3>Manual Override</h3>
+            <input type="number" id="manual-time" placeholder="Enter time in seconds" step="0.000001" style="padding: 8px; margin: 5px; border: 1px solid #ccc; border-radius: 3px;">
+            <button class="btn btn-success" onclick="setManualTransient()">Set Manual Position</button>
+        </div>
+        
+        <div class="control-group">
+            <h3>System Controls</h3>
+            <button class="btn" onclick="refreshPlot()">🔄 Refresh Plot</button>
+            <button class="btn btn-error" onclick="clearCache()">🗑️ Clear Cache</button>
+            <button class="btn btn-success" onclick="generateReport()">📊 Generate Report</button>
+        </div>
+    </div>
+    
+    <div class="keyboard-help">
+        <h4>Keyboard Shortcuts</h4>
+        <p>
+            <strong>Fine Adjustment:</strong> 
+            <span class="key-combo">←</span> / <span class="key-combo">→</span> or 
+            <span class="key-combo">Numpad 4</span> / <span class="key-combo">Numpad 6</span>
+        </p>
+        <p>
+            <strong>Coarse Adjustment:</strong> 
+            <span class="key-combo">7</span> / <span class="key-combo">9</span> or 
+            <span class="key-combo">[</span> / <span class="key-combo">]</span>
+        </p>
+        <p>
+            <strong>Refresh:</strong> <span class="key-combo">F5</span> or <span class="key-combo">R</span>
+        </p>
+    </div>
+    
+    <div id="status-display" class="status-display" style="display: none;"></div>
+    
+    <div class="plot-container">
+        <h3>Transient Analysis Visualization</h3>
+        {% if plot_filename %}
+            <img src="/plot/{{ plot_filename }}" alt="Transient Analysis Plot" class="plot-image" id="main-plot">
+        {% else %}
+            <p>No plot available. Check that experiment data is loaded.</p>
+        {% endif %}
+    </div>
+
+    <script>
+        // UNIVERSAL DEMO-READY JAVASCRIPT
+        let currentExperiment = "{{ experiment_path or '' }}";
+        
+        function showStatus(message, isError = false) {
+            const statusDiv = document.getElementById('status-display');
+            statusDiv.textContent = message;
+            statusDiv.className = isError ? 'status-display status-error' : 'status-display status-success';
+            statusDiv.style.display = 'block';
+            setTimeout(() => statusDiv.style.display = 'none', 3000);
+        }
+        
+        function updateCoordinateDisplay(data) {
+            if (data.transient_center) {
+                document.getElementById('transient-time').textContent = 
+                    data.transient_center.toFixed(6) + ' seconds';
+            }
+            if (data.transient_sample) {
+                document.getElementById('transient-sample').textContent = 
+                    data.transient_sample.toLocaleString() + ' samples';
+            }
+            if (data.transient_source) {
+                document.getElementById('detection-source').textContent = data.transient_source;
+            }
+        }
+        
+        function adjustTransient(direction, type) {
+            fetch('/adjust_transient', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    direction: direction,
+                    type: type,
+                    experiment_path: currentExperiment
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showStatus(`${type.charAt(0).toUpperCase() + type.slice(1)} adjustment ${direction}: ${data.adjustment_samples} samples`);
+                    updateCoordinateDisplay(data);
+                    refreshPlot();
+                } else {
+                    showStatus('Adjustment failed: ' + data.error, true);
+                }
+            })
+            .catch(error => showStatus('Network error: ' + error, true));
+        }
+        
+        function setManualTransient() {
+            const timeInput = document.getElementById('manual-time');
+            const transientTime = parseFloat(timeInput.value);
+            
+            if (isNaN(transientTime) || transientTime < 0) {
+                showStatus('Please enter a valid time value', true);
+                return;
+            }
+            
+            fetch('/set_transient', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    transient_time: transientTime,
+                    experiment_path: currentExperiment
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showStatus(`Manual transient set at ${transientTime}s`);
+                    updateCoordinateDisplay(data);
+                    refreshPlot();
+                    timeInput.value = '';
+                } else {
+                    showStatus('Manual set failed: ' + data.error, true);
+                }
+            })
+            .catch(error => showStatus('Network error: ' + error, true));
+        }
+        
+        function refreshPlot() {
+            fetch('/refresh')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.plot_filename) {
+                    const plotImg = document.getElementById('main-plot');
+                    plotImg.src = '/plot/' + data.plot_filename + '?t=' + Date.now();
+                    showStatus('Plot refreshed successfully');
+                } else {
+                    showStatus('Plot refresh failed', true);
+                }
+            })
+            .catch(error => showStatus('Refresh error: ' + error, true));
+        }
+        
+        function clearCache() {
+            fetch('/clear_cache', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ experiment_path: currentExperiment })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showStatus('Cache cleared successfully');
+                    refreshPlot();
+                } else {
+                    showStatus('Cache clear failed: ' + data.error, true);
+                }
+            })
+            .catch(error => showStatus('Clear cache error: ' + error, true));
+        }
+        
+        function generateReport() {
+            fetch('/api/analysis_result')
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showStatus('Analysis report generated - check console for details');
+                    console.log('Worker 4 Analysis Report:', data);
+                } else {
+                    showStatus('Report generation failed', true);
+                }
+            })
+            .catch(error => showStatus('Report error: ' + error, true));
+        }
+        
+        // Keyboard shortcuts
+        document.addEventListener('keydown', function(event) {
+            switch(event.key) {
+                case 'ArrowLeft':
+                case 'Numpad4':
+                    event.preventDefault();
+                    adjustTransient('left', 'fine');
+                    break;
+                case 'ArrowRight':
+                case 'Numpad6':
+                    event.preventDefault();
+                    adjustTransient('right', 'fine');
+                    break;
+                case '7':
+                case '[':
+                    event.preventDefault();
+                    adjustTransient('left', 'coarse');
+                    break;
+                case '9':
+                case ']':
+                    event.preventDefault();
+                    adjustTransient('right', 'coarse');
+                    break;
+                case 'F5':
+                case 'r':
+                case 'R':
+                    event.preventDefault();
+                    refreshPlot();
+                    break;
+            }
+        });
+        
+        // Load initial coordinate information
+        fetch('/get_current_transient_info', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ experiment_path: currentExperiment })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                updateCoordinateDisplay(data);
+            }
+        })
+        .catch(error => console.log('Initial load error:', error));
+        
+        // Auto-refresh every 30 seconds for demo
+        setInterval(() => {
+            fetch('/get_current_transient_info', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ experiment_path: currentExperiment })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    updateCoordinateDisplay(data);
+                }
+            })
+            .catch(error => {});
+        }, 30000);
+    </script>
+</body>
+</html>
